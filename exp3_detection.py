@@ -15,17 +15,17 @@ model.summary()
 # %%
 TRAIN_BATCH = 10
 SHUFFLE_BUFFER = 200
-base_dir = "/media/lmn/41BA76B7045343B9/dev/school/detection/FasterRCNN/data/final"
-annotations_file = "/media/lmn/41BA76B7045343B9/dev/school/detection/FasterRCNN/data/final/rois.json"
+base_dir = "./data/final"
+annotations_file = "./data/final/rois.json"
 train_ds, eval_ds = datasets(base_dir, annotations_file)
 
 # %%
-i = 0
-for image, mask in train_ds:
-    viz( (image.numpy(), mask.numpy()) )
-    i += 1
-    if i == 1:
-        break
+# i = 0
+# for image, mask in train_ds:
+#     viz( (image.numpy(), mask.numpy()) )
+#     i += 1
+#     if i == 1:
+#         break
 # %%
 train_ds = train_ds.shuffle(SHUFFLE_BUFFER).batch(TRAIN_BATCH).apply(tf.data.experimental.ignore_errors())
 eval_ds = eval_ds.batch(1).apply(tf.data.experimental.ignore_errors())
@@ -62,19 +62,19 @@ model_path = f"./models/unet_seg/{model_count}"
 model.save(model_path)
 
 # %%
-i = 0
-for image, mask in train_ds:
-    viz( (image.numpy().astype(np.int), mask.numpy()) )
-    y = model.predict(np.expand_dims(image.numpy(), axis=0))
-    mask = np.argmax(y, axis=-1).squeeze()
-    viz( (image.numpy().astype(np.int), mask) )
-    i += 1
-    if i == 1:
-        break
+# i = 0
+# for image, mask in train_ds:
+#     viz( (image.numpy().astype(np.int), mask.numpy()) )
+#     y = model.predict(np.expand_dims(image.numpy(), axis=0))
+#     mask = np.argmax(y, axis=-1).squeeze()
+#     viz( (image.numpy().astype(np.int), mask) )
+#     i += 1
+#     if i == 1:
+#         break
 
 # %%
-from tensorflow.python.client import device_lib
-device_lib.list_local_devices()
+# from tensorflow.python.client import device_lib
+# device_lib.list_local_devices()
 # %%
-tf.config.list_physical_devices('GPU')
+# tf.config.list_physical_devices('GPU')
 # %%
