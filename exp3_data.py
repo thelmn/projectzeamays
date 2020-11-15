@@ -1,3 +1,4 @@
+# %%
 import os
 import json
 import random
@@ -7,6 +8,7 @@ from utils import np_box_ops as boxops
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 
+#%%
 class RandRoi():
     def __init__(self, base_dir, classes, annotations_file, train_split=0.9):
         base_dir = os.path.expanduser(base_dir)
@@ -73,7 +75,7 @@ def roidb_gen(roidbs):
         for roidb in roidbs:
             yield preprocess_bbox(roidb)
     return gen
-
+#%%
 def preprocess_bbox(roidb, n_classes=3, iou_thresh=0.5):
     x,y = np.meshgrid(range(0, 64*4, 4),range(0, 64*4, 4))
     x = np.reshape(x, (4096))
@@ -90,6 +92,7 @@ def preprocess_bbox(roidb, n_classes=3, iou_thresh=0.5):
     ious[~mask] = 0
     return roidb['file_name'], ious
 
+# %%
 def datasets(base_dir, annotations_file, classes=['healthy', 'faw', 'zinc']):
     class_map = dict(zip(classes, range(len(classes))))
     roi = RandRoi(base_dir, class_map, annotations_file)
@@ -132,8 +135,30 @@ def nlbclass_datasets(base_dir, n_classes=2, batch_size=32, eval_split=10, n_tra
     train_ds = ds.skip(eval_split).take(n_train)
     
     return train_ds, eval_ds
+#%%
+def mix_healthy(base_dir, annot_file, out_file, prop=0.3):
+    healthy = os.listdir( os.path.join(base_dir, 'healthy') )
+    count = 0
 
+    with open(annot_file, 'r') as f:
+        with open(out_file, 'w') as out_f:
+            obj = json.load(f)
 
+            ret = []
+
+            for v in obj:
+                ret.append(v)
+
+                if random.uniform(0,1) <= prop:
+                    ret.append({
+                            'file_name': os.path.join('healthy', healthy[count]),
+                            'boxes': [[0,0,0,0]],
+                            'class': [0]
+                        })
+                    count += 1
+            json.dump(ret, out_f)
+            
+# %%
 _cmap_red_aplha = {
     'red': (
         (  0, 0, 0),
