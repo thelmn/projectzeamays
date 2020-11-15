@@ -113,6 +113,27 @@ def datasets(base_dir, annotations_file, classes=['healthy', 'faw', 'zinc']):
     )
     return train_ds, eval_ds
 
+def nlbclass_datasets(base_dir, n_classes=2, batch_size=32, eval_split=10, n_train=2000):
+    
+    gen = tf.keras.preprocessing.image.ImageDataGenerator()
+    ds = tf.data.Dataset.from_generator(
+        lambda: gen.flow_from_directory(base_dir, batch_size=batch_size),
+        output_types=(tf.float32, tf.float32), 
+        output_shapes=([batch_size,256,256,3], [batch_size,n_classes])
+    )
+
+    def onehot_to_index(images, labels):
+        labels = tf.argmax(labels, axis=-1)
+        return images, labels
+    
+    ds = ds.map(onehot_to_index)
+        
+    eval_ds = ds.take(eval_split)
+    train_ds = ds.skip(eval_split).take(n_train)
+    
+    return train_ds, eval_ds
+
+
 _cmap_red_aplha = {
     'red': (
         (  0, 0, 0),
@@ -164,6 +185,12 @@ cmap_blue_aplha = LinearSegmentedColormap('cmap_blue_aplha', _cmap_blue_aplha)
 
 plt.register_cmap(cmap=cmap_red_aplha)
 plt.register_cmap(cmap=cmap_blue_aplha)
+
+def viz_class(entry, class_list):
+    image, class_i = entry
+    clazz = class_list[class_i]
+    plt.imshow(image)
+    plt.title(f'{clazz}, {class_i}')
 
 def viz(entry, n_classes=3):
     image, mask = entry

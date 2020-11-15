@@ -1,5 +1,5 @@
 # %%
-from tensorflow.keras.layers import Input, Conv2D, MaxPool2D, Conv2DTranspose, Concatenate
+from tensorflow.keras.layers import Input, Conv2D, MaxPool2D, Conv2DTranspose, Concatenate, Flatten, Dense
 from tensorflow.keras import layers
 from tensorflow.keras import Model
 import tensorflow as tf
@@ -170,23 +170,75 @@ def unet2():
     return model
 
 # %%
-def conv2d_bn(input, n_filters, filter_size=(3,3), padding='same', activation='relu', bn=True):
-    with tf.name_scope('conv2d_bn'):
-        l = Conv2D(n_filters, filter_size, padding=padding, use_bias=False)(input)
-        if bn:
-            l = layers.BatchNormalization()(l)
-        if activation is not None:
-            l = layers.Activation('relu')(l)
-        return l
+def conv2d_bn(input, n_filters, filter_size=(3,3), padding='same', activation='relu', bn=True, name=None):
+    conv2d_name = None
+    if activation is None and not bn:
+        conv2d_name = name
+    l = Conv2D(n_filters, filter_size, padding=padding, use_bias=False, name=conv2d_name)(input)
+
+    bn_name = None
+    if activation is None:
+        bn_name = name
+    if bn:
+        l = layers.BatchNormalization(name=bn_name)(l)
+
+    if activation is not None:
+        l = layers.Activation('relu', name=name)(l)
+        layers.Layer()
+    return l
 
 def conv2d_t_bn(input, n_filters, filter_size=(3,3), strides=(2,2), padding='same', activation='relu', bn=True):
-    with tf.name_scope('conv2d_t_bn'):
-        l = Conv2DTranspose(n_filters, filter_size, strides=strides, padding=padding, use_bias=False)(input)
-        if bn:
-            l = layers.BatchNormalization()(l)
-        if activation is not None:
-            l = layers.Activation('relu')(l)
-        return l
+    l = Conv2DTranspose(n_filters, filter_size, strides=strides, padding=padding, use_bias=False)(input)
+    if bn:
+        l = layers.BatchNormalization()(l)
+    if activation is not None:
+        l = layers.Activation('relu')(l)
+    return l
+
+# %%
+def unet3_encoder(i):
+    # lvl1
+    l = conv2d_bn(i, 32, (3, 3))
+    l1 = conv2d_bn(l, 32, (3, 3))
+    l = MaxPool2D((2, 2))(l1)
+
+    # lvl2
+    l = conv2d_bn(l, 64, (3, 3))
+    l2 = conv2d_bn(l, 64, (3, 3))
+    l = MaxPool2D((2, 2))(l2)
+
+    # lvl3
+    l = conv2d_bn(l, 128, (3, 3))
+    l3 = conv2d_bn(l, 128, (3, 3), name='conv2d_bn_enc3_64x64x128')
+    l = MaxPool2D((2, 2))(l3)
+
+    # lvl4
+    l = conv2d_bn(l, 128, (3, 3))
+    l4 = conv2d_bn(l, 128, (3, 3), name='conv2d_bn_enc4_32x32x128')
+    l = MaxPool2D((2, 2))(l4)
+
+    # lvl5
+    l = conv2d_bn(l, 128, (3, 3))
+    l5 = conv2d_bn(l, 128, (3, 3), name='conv2d_bn_enc5_16x16x128')
+
+    return l3, l4, l5
+
+def unet3_decoder(l3, l4, l5):
+    l = conv2d_t_bn(l5, 128, (3, 3), strides=(2,2))
+
+    l = Concatenate(axis=-1)([l4, l])
+
+    l = conv2d_bn(l, 128, (3, 3))
+    _l4 = conv2d_bn(l, 128, (3, 3))
+
+    l = conv2d_t_bn(_l4, 128, (3, 3), strides=(2,2))
+
+    l = Concatenate(axis=-1)([l3, l])
+
+    l = conv2d_bn(l, 128, (3, 3))
+    l = conv2d_bn(l, 64, (3, 3))
+    l = conv2d_bn(l, 3, (1, 1), bn=False, activation=None)
+    return l
 
 # %%
 def unet3():
@@ -230,44 +282,25 @@ def unet3():
     # UNet
     i = Input(shape=(256,256,3))
 
-    # lvl1
-    l = conv2d_bn(i, 32, (3, 3))
-    l1 = conv2d_bn(l, 32, (3, 3))
-    l = MaxPool2D((2, 2))(l1)
+    l3, l4, l5 = unet3_encoder(i)
+    l = unet3_decoder(l3, l4, l5)
+ 
+    model = Model(inputs=i, outputs=l)
+    return model
 
-    # lvl2
-    l = conv2d_bn(l, 64, (3, 3))
-    l2 = conv2d_bn(l, 64, (3, 3))
-    l = MaxPool2D((2, 2))(l2)
+def unet3_enc_classifier():
+    i = Input(shape=(256,256,3))
 
-    # lvl3
-    l = conv2d_bn(l, 128, (3, 3))
-    l3 = conv2d_bn(l, 128, (3, 3))
-    l = MaxPool2D((2, 2))(l3)
+    _, _, l5 = unet3_encoder(i)
 
-    # lvl4
-    l = conv2d_bn(l, 128, (3, 3))
-    l4 = conv2d_bn(l, 128, (3, 3))
-    l = MaxPool2D((2, 2))(l4)
+    l = MaxPool2D((2, 2))(l5)
 
-    # lvl5
-    l = conv2d_bn(l, 128, (3, 3))
-    l5 = conv2d_bn(l, 128, (3, 3))
-
-    l = conv2d_t_bn(l5, 128, (3, 3), strides=(2,2))
-
-    l = Concatenate(axis=-1)([l4, l])
-
-    l = conv2d_bn(l, 128, (3, 3))
-    _l4 = conv2d_bn(l, 128, (3, 3))
-
-    l = conv2d_t_bn(_l4, 128, (3, 3), strides=(2,2))
-
-    l = Concatenate(axis=-1)([l3, l])
-
-    l = conv2d_bn(l, 128, (3, 3))
-    l = conv2d_bn(l, 64, (3, 3))
-    l = conv2d_bn(l, 3, (1, 1), bn=False, activation=None)
+    l = conv2d_bn(l, 64, (3,3), padding='valid')
+    l = Flatten()(l)
+    l = Dense(1, activation='sigmoid')(l)
 
     model = Model(inputs=i, outputs=l)
     return model
+
+
+
