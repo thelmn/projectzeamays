@@ -26,8 +26,8 @@ args = parser.parse_args()
 print("config:", args)
 
 lr = args.lr
-decay = args.lr_decay
 epochs = args.epochs
+decay = lr/epochs
 model_count = args.model_i
 batch_size = args.n_batch
 base_dir = args.base_dir
@@ -63,13 +63,16 @@ train_ds = train_ds.shuffle(SHUFFLE_BUFFER).batch(batch_size).apply(tf.data.expe
 eval_ds = eval_ds.batch(1).apply(tf.data.experimental.ignore_errors())
 
 # %%
-lr_schedule = optimizers.schedules.ExponentialDecay(
-    initial_learning_rate=lr,
-    decay_steps=epochs,
-    decay_rate=decay
-)
-
-optm = optimizers.Adam(learning_rate=lr_schedule)
+# lr_schedule = optimizers.schedules.ExponentialDecay(
+#     initial_learning_rate=lr,
+#     decay_steps=epochs,
+#     decay_rate=decay
+# )
+# %%
+optm = optimizers.Adam(
+    learning_rate=lr,
+    decay=decay
+    )
 
 model.compile(
     optimizer=optm,
