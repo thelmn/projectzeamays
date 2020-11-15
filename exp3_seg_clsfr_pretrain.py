@@ -19,6 +19,7 @@ parser.add_argument('--model_i', type=int, default=1, help='model count, for sav
 parser.add_argument('--n_batch', type=int, default=32, help='batch size')
 parser.add_argument('--n_train', type=int, default=None, help='Number of batches to take for training')
 parser.add_argument('--base_dir', type=str, default='./data/NLB', help='data folder')
+parser.add_argument('--class_weights', type=float, nargs='+', help='weights for class loss during training')
 
 args = parser.parse_args()
 
@@ -29,6 +30,7 @@ model_count = args.model_i
 batch_size = args.n_batch
 n_train = args.n_train
 base_dir = args.base_dir
+class_weights = args.class_weights if args.class_weights and len(args.class_weights) > 0 else None
 
 # %%
 # with tf.device('CPU'):
@@ -74,7 +76,7 @@ lr_schedule = optimizers.schedules.ExponentialDecay(
     decay_steps=epochs,
     decay_rate=decay
 )
-
+# %%
 optm = optimizers.Adam(
     learning_rate=lr_schedule
 )
@@ -93,7 +95,8 @@ model.fit(
     train_ds,
     validation_data=eval_ds,
     epochs=epochs,
-    callbacks=[tensorboard_callback]
+    callbacks=[tensorboard_callback],
+    class_weight={0: 0.75, 1: 0.25}
 )
 
 # %%
