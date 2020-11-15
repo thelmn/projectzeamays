@@ -58,6 +58,7 @@ train_ds, eval_ds = datasets(base_dir, annot_file)
 #     if i == 1:
 #         break
 # %%
+SHUFFLE_BUFFER = 300
 train_ds = train_ds.shuffle(SHUFFLE_BUFFER).batch(batch_size).apply(tf.data.experimental.ignore_errors())
 eval_ds = eval_ds.batch(1).apply(tf.data.experimental.ignore_errors())
 

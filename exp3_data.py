@@ -153,9 +153,10 @@ def mix_healthy(base_dir, annot_file, out_file, prop=0.3):
                     ret.append({
                             'file_name': os.path.join('healthy', healthy[count]),
                             'boxes': [[0,0,0,0]],
-                            'class': [0]
+                            'class': ['healthy']
                         })
                     count += 1
+            print(len(obj), len(ret))
             json.dump(ret, out_f)
             
 # %%
