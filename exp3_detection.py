@@ -19,7 +19,7 @@ parser.add_argument('--model_i', type=int, default=1, help='model count, for sav
 parser.add_argument('--n_batch', type=int, default=32, help='batch size')
 parser.add_argument('--model', type=str, default='unet3', help='model to train: unet1, unet2, unet3')
 parser.add_argument('--base_dir', type=str, default='./data/final', help='data folder')
-parser.add_argument('--annot_file', type=str, default='./data/final/rois_whealthy.json', help='file with box annotations')
+parser.add_argument('--annot_file', type=str, default='./data/final/rois_final.json', help='file with box annotations')
 
 args = parser.parse_args()
 

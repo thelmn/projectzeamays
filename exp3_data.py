@@ -2,6 +2,7 @@
 import os
 import json
 import random
+import cv2
 import numpy as np
 import tensorflow as tf
 from utils import np_box_ops as boxops
@@ -24,16 +25,9 @@ class RandRoi():
         with open(json_file) as f:
             obj = json.load(f)
 
-        ret_train = []
-        ret_eval = []
+        ret = []
 
         for v in obj:
-            # make this a training point with prob train_split
-            if random.uniform(0,1) < train_split:
-                split = 'train'
-            else: 
-                split = 'eval'
-
             _fname = v["file_name"]
             fname = os.path.join(self.imgdir, _fname)
             assert os.path.exists(fname), fname
@@ -46,23 +40,24 @@ class RandRoi():
             # roidb["segmentation"] = segs
             roidb["class"] = np.array([self.classes[cl] for cl in v["class"]], dtype=np.int64)
             roidb["is_crowd"] = np.zeros((N, ), dtype=np.int8)
-            if split == 'eval':
-                ret_eval.append(roidb)
-            
-            # attempt to balance the zinc class
-            if split == 'train' and len(roidb['class']) > 0 and roidb['class'][0] == self.classes['zinc']:
-                for i in range(random.randint(1,14)):
-                    ret_train.append(roidb)
-            
+            ret.append(roidb)
+        
+        n = int(len(ret) * train_split)
+        ret_train = ret[:n]
+        ret_eval = ret[n:]
+        
         return ret_train, ret_eval
 
     def training_roidbs(self):
+        print("Training images:", len(self.rois))
         return self.rois
     
     def inference_roidbs(self):
+        print("Eval images:", len(self.eval_rois))
         return self.eval_rois
 
 def load_image(filename):
+    tf.print(filename)
     raw = tf.io.read_file(filename)
     image = tf.image.decode_image(raw)
     image = tf.cast(image, tf.float32)
@@ -135,6 +130,64 @@ def nlbclass_datasets(base_dir, n_classes=2, batch_size=32, eval_split=10, n_tra
     train_ds = ds.skip(eval_split).take(n_train)
     
     return train_ds, eval_ds
+
+# %%
+def oversample_zinc(base_dir, annot_file, out_file, prop=0.3):
+    with open(annot_file, 'r') as f:
+        with open(out_file, 'w') as out_f:
+            obj = json.load(f)
+
+            ret = []
+
+            for v in obj:
+                ret.append(v)
+                # attempt to balance the zinc class
+                if len(v['class']) > 0 and v['class'][0] == 'zinc':
+                    for i in range(random.randint(1,4)):
+                        ret.append(v)
+            print(len(obj), len(ret))
+            json.dump(ret, out_f)
+# %%
+def fix_no_boxes(base_dir, annot_file, out_file):
+    with open(annot_file, 'r') as f:
+        with open(out_file, 'w') as out_f:
+            obj = json.load(f)
+            ret = []
+            for v in obj:
+                clazz = v['file_name'].split('/')[0]
+                assert clazz in ['healthy','faw','zinc'], v['file_name']
+
+                if len(v['class']) == 0:
+                    v['class'] = [clazz]
+                if len(v['boxes']) == 0:
+                    v['boxes'] = [[0,0,0,0]]
+                ret.append(v)
+            json.dump(ret, out_f)
+
+# %%
+def count_classes(base_dir, annot_file):
+    counts = {
+        'healthy': 0,
+        'faw': 0,
+        'zinc': 0
+    }
+    with open(annot_file, 'r') as f:
+        obj = json.load(f)
+        for v in obj:
+            clazz = v['class'][0]
+            assert clazz in list(counts.keys()), v['file_name']
+            counts[clazz] += 1
+    print(counts)
+# %%
+def shuffle_ds(base_dir, annot_file, out_file):
+    with open(annot_file, 'r') as f:
+        with open(out_file, 'w') as out_f:
+            obj = json.load(f)
+            print('before shuffle: ', len(obj))
+            random.shuffle(obj)
+            print('after shuffle: ', len(obj))
+            json.dump(obj, out_f)
+
 #%%
 def mix_healthy(base_dir, annot_file, out_file, prop=0.3):
     healthy = os.listdir( os.path.join(base_dir, 'healthy') )
@@ -227,3 +280,59 @@ def viz(entry, n_classes=3):
     plt.imshow(mask == 1, cmap='cmap_red_aplha', vmin=0, vmax=1)
     plt.imshow(mask == 2, cmap='cmap_blue_aplha', vmin=0, vmax=1)
     plt.show()
+
+#%%
+def viz_nmasks(image, masks, n_classes=3):
+    n = len(masks)
+    n_sq = int(np.floor(np.sqrt(n+1)))
+    fig, ax = plt.subplots(n_sq, n_sq)
+    image = image.astype(np.int)
+    # print('image', image.dtype, np.min(image), np.max(image))
+    ax[0,0].imshow(image)
+    fig.tight_layout = True
+    plt.imshow(image)
+    for i, mask in enumerate(masks):
+        ax_i = (i+1)//n_sq
+        ax_j = (i+1)%n_sq
+        print('mask_i', i, mask.dtype, np.min(mask), np.max(mask))
+        # mask = mask.astype(np.int)
+        ax[ax_i,ax_j].imshow(image)
+        ax[ax_i,ax_j].imshow(mask[:,:,0], cmap='cmap_red_aplha', vmin=0, vmax=1)
+        ax[ax_i,ax_j].imshow(mask[:,:,1], cmap='cmap_blue_aplha', vmin=0, vmax=1)
+    plt.show()
+
+# %%
+def smooth_mask(mask):
+    smooth = cv2.morphologyEx(mask, cv2.MORPH_OPEN,cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)))
+    return smooth
+
+def contour_mask(mask):
+    mask = np.array(mask, dtype=int)
+    # print(mask.dtype, mask.shape, np.min(mask), np.max(mask))
+    if np.min(mask) == np.max(mask):
+        return mask
+    mask = np.repeat(mask, 4, axis=0)
+    mask = np.repeat(mask, 4, axis=1)
+    contours, hierarchy = cv2.findContours(mask, cv2.RETR_FLOODFILL, cv2.CHAIN_APPROX_SIMPLE)
+
+    hull = []
+    for i in range(len(contours)):
+        hull.append(cv2.convexHull(contours[i], False))
+    
+    drawing = np.zeros((mask.shape[0], mask.shape[1], 3), np.uint8)
+
+    # draw contours and hull points
+    for i in range(len(contours)):
+        color_contours = (255, 0, 0) # green - color for contours
+        color = (0, 255, 0) # blue - color for convex hull
+        # draw ith contour
+        cv2.drawContours(drawing, contours, i, color_contours, 2, 8, hierarchy)
+        # draw ith convex hull object
+        cv2.drawContours(drawing, hull, i, color, 2, 8)
+    print(np.count_nonzero(drawing), np.product(drawing.shape))
+    drawing = drawing[:,:,1]
+    drawing = cv2.resize(drawing, (256,256), interpolation=cv2.INTER_CUBIC)
+    print(drawing.shape, np.count_nonzero(drawing), np.product(drawing.shape))
+    return drawing
+
+# %%
