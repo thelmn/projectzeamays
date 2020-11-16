@@ -45,7 +45,7 @@ class RandRoi():
         n = int(len(ret) * train_split)
         ret_train = ret[:n]
         ret_eval = ret[n:]
-        
+
         return ret_train, ret_eval
 
     def training_roidbs(self):
@@ -57,7 +57,7 @@ class RandRoi():
         return self.eval_rois
 
 def load_image(filename):
-    tf.print(filename)
+    # tf.print(filename)
     raw = tf.io.read_file(filename)
     image = tf.image.decode_image(raw)
     image = tf.cast(image, tf.float32)
